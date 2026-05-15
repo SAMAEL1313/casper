@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Casper AI</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <h1>Casper AI</h1>
+
+    <div id="chat-box"></div>
+
+    <div class="controls">
+        <label><input type="checkbox" id="voiceToggle" checked> AI Voice</label>
+    </div>
+
+    <div class="input-area">
+        <input type="text" id="message" placeholder="Talk to Casper...">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+<script>
+
+async function sendMessage() {
+
+    const input = document.getElementById("message");
+
+    const message = input.value;
+
+    if (!message) return;
+
+    const chatBox = document.getElementById("chat-box");
+
+    chatBox.innerHTML += `
+        <div class="user">
+            You: ${message}
+        </div>
+    `;
+
+    input.value = "";
+
+    const response = await fetch("/chat", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            message: message,
+            voice: document.getElementById("voiceToggle").checked
+        })
+    });
+
+    let data;
+    try {
+        data = await response.json();
+    } catch (error) {
+        chatBox.innerHTML += `
+            <div class="casper error">
+                Casper: Failed to parse server response.
+            </div>
+        `;
+        chatBox.scrollTop = chatBox.scrollHeight;
+        return;
+    }
+
+    if (!response.ok) {
+        chatBox.innerHTML += `
+            <div class="casper error">
+                Casper: ${data.error || 'Server error. Try again later.'}
+            </div>
+        `;
+        chatBox.scrollTop = chatBox.scrollHeight;
+        return;
+    }
+
+    chatBox.innerHTML += `
+        <div class="casper">
+            Casper: ${data.reply}
+        </div>
+    `;
+
+    if (data.audio) {
+        playAudio(data.audio);
+    } else if (document.getElementById("voiceToggle").checked) {
+        speakText(data.reply);
+    }
+
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function playAudio(base64Audio) {
+    const audioData = Uint8Array.from(atob(base64Audio), c => c.charCodeAt(0));
+    const blob = new Blob([audioData], { type: 'audio/mpeg' });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play().catch(() => {
+        speakText('Sorry, I could not play the AI voice.');
+    });
+}
+
+function speakText(text) {
+    if (!window.speechSynthesis) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.pitch = 1.05;
+    utterance.rate = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    utterance.voice = voices.find(v => v.lang.startsWith('en')) || null;
+
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+}
+
+</script>
+
+</body>
+</html>
